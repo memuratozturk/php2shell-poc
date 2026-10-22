@@ -352,14 +352,29 @@ sudo ./mitigation/quick-fix.sh --revert
 
 > ⚠️ WAF rules and config changes are **temporary mitigations**. The real fix is updating PHP.
 
-## 🔍 Threat Detection
+## 🔍 Detection Rules (IDS / SIEM / WAF)
 
-See [docs/THREAT_DETECTION.md](docs/THREAT_DETECTION.md) for:
-- Behavioral indicators (suspicious child processes)
-- Network-level detection (multipart anomalies, cookie anomalies)
-- YARA and Snort/Suricata rules
-- Log analysis patterns
-- Incident response steps
+Pre-built detection rules in [`detection/`](detection/):
+
+| File | Format | Rules |
+|------|--------|-------|
+| [`php2shell.rules`](detection/php2shell.rules) | Suricata / Snort | 12 rules (request, response, recon) |
+| [`php2shell.sigma.yaml`](detection/php2shell.sigma.yaml) | Sigma (SIEM) | 5 rules (Splunk, Elastic, Sentinel) |
+| [`php2shell.lua`](detection/php2shell.lua) | OpenResty / Nginx Lua | WAF module (block + log modes) |
+
+See also [docs/THREAT_DETECTION.md](docs/THREAT_DETECTION.md) for YARA rules, log analysis, and incident response.
+
+## 🎯 Downstream Impact
+
+| Platform | Vulnerable | Notes |
+|----------|:----------:|-------|
+| **WordPress** | Yes | WooCommerce and many plugins use sessions |
+| **Drupal** | Yes | Native PHP sessions by default |
+| **Joomla** | Yes | Native PHP sessions by default |
+| **Magento** | Yes | Vulnerable even in maintenance mode |
+| **Laravel** | Yes | `PendingBroadcast` is a known `__destruct` gadget |
+| **MediaWiki** | Yes | PHP sessions for user auth |
+| **Custom apps** | Yes | Any PHP app on mod_php |
 
 ## 🧪 Nuclei Templates
 

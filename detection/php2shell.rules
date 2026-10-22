@@ -1,0 +1,151 @@
+# Suricata / Snort IDS rules — CVE-2026-109618 / CVE-2026-109619
+# SID range: 2026100–2026119
+
+# ---- REQUEST-SIDE ----
+
+# Upload progress field in multipart POST (primary trigger)
+alert http $EXTERNAL_NET any -> $HOME_NET any ( \
+    msg:"PHP2SHELL PHP_SESSION_UPLOAD_PROGRESS in multipart POST"; \
+    flow:established,to_server; \
+    http.method; content:"POST"; \
+    http.content_type; content:"multipart/form-data"; \
+    http.request_body; content:"PHP_SESSION_UPLOAD_PROGRESS"; \
+    classtype:web-application-attack; \
+    sid:2026100; rev:1; \
+    reference:cve,2026-109618; reference:cve,2026-109619; \
+)
+
+# PHPSESSID as form field (session fixation — should be Cookie header)
+alert http $EXTERNAL_NET any -> $HOME_NET any ( \
+    msg:"PHP2SHELL PHPSESSID in POST body (session fixation)"; \
+    flow:established,to_server; \
+    http.method; content:"POST"; \
+    http.content_type; content:"multipart/form-data"; \
+    http.request_body; content:"name=|22|PHPSESSID|22|"; \
+    classtype:web-application-attack; \
+    sid:2026101; rev:1; \
+    reference:cve,2026-109618; \
+)
+
+# PHP code in upload filename (session injection → LFI)
+alert http $EXTERNAL_NET any -> $HOME_NET any ( \
+    msg:"PHP2SHELL PHP code in upload filename"; \
+    flow:established,to_server; \
+    http.method; content:"POST"; \
+    http.content_type; content:"multipart/form-data"; \
+    http.request_body; content:"filename=|22|"; content:"<?"; distance:0; within:500; \
+    classtype:web-application-attack; \
+    sid:2026102; rev:1; \
+    reference:cve,2026-109618; \
+)
+
+# Serialized PHP object in filename (handler mismatch → deserialization)
+alert http $EXTERNAL_NET any -> $HOME_NET any ( \
+    msg:"PHP2SHELL serialized object in filename (handler mismatch)"; \
+    flow:established,to_server; \
+    http.method; content:"POST"; \
+    http.content_type; content:"multipart/form-data"; \
+    http.request_body; content:"filename=|22|"; content:"|7c|O:|22|"; distance:0; within:200; \
+    classtype:web-application-attack; \
+    sid:2026103; rev:1; \
+    reference:cve,2026-109619; \
+)
+
+# Oversized filename (session inflation → OOM)
+alert http $EXTERNAL_NET any -> $HOME_NET any ( \
+    msg:"PHP2SHELL oversized filename (session inflation)"; \
+    flow:established,to_server; \
+    http.method; content:"POST"; \
+    http.content_type; content:"multipart/form-data"; \
+    http.request_body; content:"PHP_SESSION_UPLOAD_PROGRESS"; \
+    http.request_body; content:"filename=|22|"; \
+    isdataat:10000,relative; \
+    classtype:web-application-attack; \
+    sid:2026104; rev:1; \
+    reference:cve,2026-109619; \
+)
+
+# Chunked multipart POST (post_max_size bypass)
+alert http $EXTERNAL_NET any -> $HOME_NET any ( \
+    msg:"PHP2SHELL chunked multipart POST (post_max_size bypass)"; \
+    flow:established,to_server; \
+    http.method; content:"POST"; \
+    http.content_type; content:"multipart/form-data"; \
+    http.header; content:"Transfer-Encoding"; content:"chunked"; \
+    classtype:web-application-attack; \
+    sid:2026105; rev:1; \
+    reference:cve,2026-109618; \
+)
+
+# Session file path in URL (LFI trigger)
+alert http $EXTERNAL_NET any -> $HOME_NET any ( \
+    msg:"PHP2SHELL session file in URL (LFI exploitation)"; \
+    flow:established,to_server; \
+    http.uri; content:"/sess_"; \
+    http.uri; pcre:"/(?:\/tmp\/sessions|\/var\/lib\/php\/sessions?)\/sess_/i"; \
+    classtype:web-application-attack; \
+    sid:2026106; rev:1; \
+    reference:cve,2026-109618; \
+)
+
+# ---- RESPONSE-SIDE ----
+
+# PHP OOM error in response
+alert http $HOME_NET any -> $EXTERNAL_NET any ( \
+    msg:"PHP2SHELL OOM error in response"; \
+    flow:established,to_client; \
+    http.response_body; content:"Allowed memory size"; \
+    content:"exhausted"; distance:0; within:100; \
+    classtype:web-application-attack; \
+    sid:2026110; rev:1; \
+    reference:cve,2026-109618; \
+)
+
+# Session destruction failure (stale state consumed)
+alert http $HOME_NET any -> $EXTERNAL_NET any ( \
+    msg:"PHP2SHELL session destruction failure (stale state)"; \
+    flow:established,to_client; \
+    http.response_body; content:"Session object destruction failed"; \
+    classtype:web-application-attack; \
+    sid:2026111; rev:1; \
+    reference:cve,2026-109619; \
+)
+
+# Anomalous PHPSESSID cookie (heap memory leak, >64 chars)
+alert http $HOME_NET any -> $EXTERNAL_NET any ( \
+    msg:"PHP2SHELL anomalous PHPSESSID (heap leak)"; \
+    flow:established,to_client; \
+    http.header; content:"Set-Cookie"; content:"PHPSESSID="; \
+    pcre:"/Set-Cookie:\s*PHPSESSID=[a-zA-Z0-9,%25-]{64,}/"; \
+    classtype:web-application-attack; \
+    sid:2026112; rev:1; \
+    reference:cve,2026-109618; \
+)
+
+# ---- RECON ----
+
+# Small upload progress probes (3+ in 60s from same source)
+alert http $EXTERNAL_NET any -> $HOME_NET any ( \
+    msg:"PHP2SHELL reconnaissance probe"; \
+    flow:established,to_server; \
+    http.method; content:"POST"; \
+    http.content_type; content:"multipart/form-data"; \
+    http.request_body; content:"PHP_SESSION_UPLOAD_PROGRESS"; \
+    dsize:<2000; \
+    threshold:type both, track by_src, count 3, seconds 60; \
+    classtype:web-application-activity; \
+    sid:2026115; rev:1; \
+    reference:cve,2026-109618; reference:cve,2026-109619; \
+)
+
+# Vulnerable PHP version in response header
+alert http $HOME_NET any -> $EXTERNAL_NET any ( \
+    msg:"PHP2SHELL vulnerable PHP version in header"; \
+    flow:established,to_client; \
+    http.header; content:"X-Powered-By"; content:"PHP/"; \
+    pcre:"/X-Powered-By:\s*PHP\/(?:5\.|7\.|8\.[01]\.|8\.2\.(?:[0-9]|[12][0-9]|3[0-4])\b|8\.3\.(?:[0-9]|[12][0-9]|3[0-5])\b|8\.4\.(?:[0-9]|1[0-9]|2[0-6])\b|8\.5\.(?:[0-9]|1[01])\b)/"; \
+    threshold:type limit, track by_src, count 1, seconds 3600; \
+    classtype:policy-violation; \
+    sid:2026116; rev:1; \
+    reference:cve,2026-109618; reference:cve,2026-109619; \
+)
