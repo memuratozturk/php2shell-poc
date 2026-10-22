@@ -309,7 +309,7 @@ php2shell-poc/
 ├── evidence/                   # Proof files
 │   └── *.txt                   # Test outputs
 └── tests/                      # Unit tests
-    └── test_units.py           # 33 tests
+    └── test_units.py           # 56 tests
 ```
 
 ---
@@ -327,20 +327,51 @@ php2shell-poc/
 
 ## 🔗 References
 
+### Original Research & Advisories
+
 | Resource | Link |
 |----------|------|
 | Wiz Research Blog | [PHP2Shell: Chaining 4 Bugs for PHP RCE](https://www.wiz.io/blog/php2shell-php-rce) |
 | CVE-2026-109618 | [NVD Entry](https://nvd.nist.gov/vuln/detail/CVE-2026-109618) |
 | CVE-2026-109619 | [NVD Entry](https://nvd.nist.gov/vuln/detail/CVE-2026-109619) |
-| PHP Security | [PHP Security Advisory](https://www.php.net/security) |
+| GHSA-w8hw-w9fx-j79w | [GitHub Security Advisory](https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w) |
+| GHSA-6wmf-4rv5-p3rp | [GitHub Security Advisory](https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp) |
+| PHP Security Advisory | [php.net/security](https://www.php.net/security) |
+| Patch Commit | [php-src@3584a98](https://github.com/php/php-src/commit/3584a98bda) |
+
+### Analysis & Detection
+
+| Resource | Link |
+|----------|------|
+| Sansec Analysis | [PHPSESSID Heap Leak Discovery](https://sansec.io/research/php2shell) |
+| Cloudflare WAF | [PHP Vulnerabilities WAF Protection](https://blog.cloudflare.com/php-vulnerabilities-waf-protection/) |
+| Corelight Detection | [Zeek + Suricata Rules](https://github.com/corelight/php2shell-detect) |
+| NCSC-NL Advisory | [php2shell Advisory](https://github.com/NCSC-NL/php2shell) |
+
+### Community Research
+
+| Resource | Link |
+|----------|------|
+| eness/php2shell-PoC | [Mitigation Configs + Source Patch](https://github.com/eness/php2shell-CVE-2026-109618-CVE-2026-109619-PoC) |
+| 9bie/php2shell-bypass-aslr | [ASLR Bypass + 128M Exploit](https://github.com/9bie/php2shell-bypass-aslr-exp) |
+| ikow/php2shell-poc | [5-Chain Analysis + Detection Rules](https://github.com/ikow/php2shell-poc) |
+| JoasASantos/php2shell-exploit | [Universal Exploit + Profile System](https://github.com/JoasASantos/php2shell-exploit) |
+| EOL PHP Backports | [Anton-Barinov/php2shell-patches](https://github.com/Anton-Barinov/php2shell-patches) |
+
+### PHP Internals
+
+| Resource | Link |
+|----------|------|
+| Session Upload Progress | [PHP Manual](https://www.php.net/manual/en/session.upload-progress.php) |
+| Zend MM Allocator | [PHP Internals Book](https://www.phpinternalsbook.com/php7/memory_management/zend_memory_manager.html) |
 
 ---
 
 ## 👤 Credits
 
 - **Wiz Research** — Original discovery and responsible disclosure
-- **[@memuratozturk](https://github.com/memuratozturk)** — Independent verification, exploit development, testing
-- **PHP Security Team** — Fast patching
+- **[@memuratozturk](https://github.com/memuratozturk)** — Independent verification, exploit development, 6 CMS testing, detection rules, tooling
+- **PHP Security Team** — Fast patching (8.4.27, 8.3.36, 8.2.35, 8.5.12)
 
 ---
 
