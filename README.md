@@ -276,17 +276,36 @@ php2shell-poc/
 ├── exploit/                    # Attack tools
 │   ├── php2shell_exploit.py    # Main RCE exploit
 │   ├── memdisclosure.py        # Memory leak tool
+│   ├── chain_a_session_lfi.py  # Chain A — Session LFI
+│   ├── chain_c_mismatch_rce.py # Chain C — Mismatch RCE
 │   ├── bug3_backtrace_uaf.py   # Bug 3 tester
 │   └── bug4_opcache_confusion.py # Bug 4 exploit
 ├── tools/                      # Helper tools
 │   ├── scanner.py              # Find vulnerable servers
+│   ├── recon.py                # Target fingerprinting (exploit-free)
 │   ├── shell_server.py         # Reverse shell listener
 │   └── calibrate_offsets.py    # Offset calculator
+├── profiles/                   # JSON offset profiles for known builds
+│   ├── php-8.4.26-bookworm-amd64.json
+│   ├── php-8.4.26-trixie-amd64.json
+│   └── php-8.4.26-trixie-arm64.json
 ├── lab/                        # Test environment
 │   └── docker-compose.yml      # WordPress + Drupal + Joomla
+├── labs/                       # Additional lab environments
+│   └── phpmyadmin/             # phpMyAdmin + MariaDB lab
+├── detection/                  # IDS / SIEM / WAF rules
+│   ├── php2shell.rules         # Suricata / Snort
+│   ├── php2shell.sigma.yaml    # Sigma (SIEM)
+│   └── php2shell.lua           # OpenResty / Nginx Lua
+├── mitigation/                 # WAF & web server configs
+│   ├── apache/                 # ModSecurity + .htaccess
+│   ├── cloudflare/             # WAF rule templates
+│   ├── lighttpd/               # Lighttpd config
+│   └── frankenphp/             # FrankenPHP Caddyfile
 ├── docs/                       # Documentation
 │   ├── TECHNICAL.md            # Technical details
-│   └── WIZ_REPRODUCTION.md     # Reproduction guide
+│   ├── WIZ_REPRODUCTION.md     # Reproduction guide
+│   └── ROADMAP.md              # Future research roadmap
 ├── evidence/                   # Proof files
 │   └── *.txt                   # Test outputs
 └── tests/                      # Unit tests
@@ -351,6 +370,21 @@ sudo ./mitigation/quick-fix.sh --revert
 ```
 
 > ⚠️ WAF rules and config changes are **temporary mitigations**. The real fix is updating PHP.
+
+## 🔧 Offset Profiles
+
+Pre-built offset profiles for known PHP builds in [`profiles/`](profiles/):
+
+| Profile | PHP | Distro | Arch |
+|---------|-----|--------|------|
+| bookworm-amd64 | 8.4.26 | Debian 12 | x86_64 |
+| trixie-amd64 | 8.4.26 | Debian 13 | x86_64 |
+| trixie-arm64 | 8.4.26 | Debian 13 | aarch64 |
+
+Calibrate for your target:
+```bash
+python3 tools/calibrate_offsets.py --binary /path/to/libphp.so
+```
 
 ## 🔍 Detection Rules (IDS / SIEM / WAF)
 
