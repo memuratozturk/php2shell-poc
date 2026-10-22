@@ -1,0 +1,48 @@
+id: php2shell-detect
+
+info:
+  name: PHP2Shell - Vulnerable mod_php Detection
+  author: memuratozturk
+  severity: info
+  description: |
+    Detects PHP installations running on mod_php (Apache handler) with a version
+    vulnerable to the PHP2Shell chain (CVE-2026-109618 / CVE-2026-109619).
+    This template only fingerprints — it does not attempt exploitation.
+  reference:
+    - https://www.wiz.io/blog/php2shell-php-rce
+    - https://github.com/memuratozturk/php2shell-poc
+  metadata:
+    max-request: 1
+    vendor: php
+    product: php
+  tags: php,detect,mod_php,fingerprint,php2shell
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - "X-Powered-By: PHP/8\\."
+
+      - type: regex
+        part: header
+        regex:
+          - "(?i)Server:.*Apache"
+
+      - type: regex
+        negative: true
+        part: header
+        regex:
+          - "(?i)X-Powered-By:.*FPM"
+
+    extractors:
+      - type: kval
+        part: header
+        kval:
+          - x_powered_by
+          - server
