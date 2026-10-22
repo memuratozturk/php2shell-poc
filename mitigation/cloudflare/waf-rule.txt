@@ -1,0 +1,22 @@
+# Cloudflare WAF — Custom Rule for php2shell mitigation
+# Apply via Cloudflare Dashboard > Security > WAF > Custom rules
+#
+# Rule 1: Block PHP_SESSION_UPLOAD_PROGRESS in request body
+# (Enterprise plan only — body inspection required)
+#
+#   Expression:
+#     http.request.body.raw contains "PHP_SESSION_UPLOAD_PROGRESS"
+#   Action: Block
+#
+# Rule 2: Block multipart POST to non-upload paths
+# Adjust the URI path filter to match your upload endpoints.
+#
+#   Expression:
+#     http.request.method in {"POST" "PUT" "PATCH"} and
+#     http.request.headers["content-type"] contains "multipart/form-data" and
+#     not http.request.uri.path in {"/wp-admin/upload.php" "/admin/media"}
+#   Action: Block
+#
+# NOTE: Do NOT block based on PHPSESSID cookie — it breaks valid sessions.
+# NOTE: Multipart blocking breaks legitimate file uploads on matched paths.
+#       Whitelist your upload endpoints.

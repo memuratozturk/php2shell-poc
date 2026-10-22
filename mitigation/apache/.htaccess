@@ -1,0 +1,7 @@
+# Block multipart POST/PUT/PATCH before reaching PHP.
+# WARNING: Also blocks legitimate uploads. Use ONLY on paths
+# that do not receive file uploads. Real fix = update PHP.
+RewriteEngine On
+RewriteCond %{REQUEST_METHOD} ^(POST|PUT|PATCH)$ [NC]
+RewriteCond %{HTTP:Content-Type} ^[[:space:]]*multipart/form-data([;,[:space:]]|$) [NC]
+RewriteRule ^ - [F,L]

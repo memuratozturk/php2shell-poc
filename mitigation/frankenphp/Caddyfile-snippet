@@ -1,0 +1,6 @@
+# FrankenPHP — disable session upload progress globally
+{
+    frankenphp {
+        php_ini session.upload_progress.enabled 0
+    }
+}

@@ -325,6 +325,58 @@ php2shell-poc/
 
 ---
 
+## 🛡️ Mitigation Configs (WAF / Web Server)
+
+Ready-to-use configs for blocking the exploit at the network layer:
+
+| Platform | Config | What It Does |
+|----------|--------|-------------|
+| Apache ModSecurity | [`mitigation/apache/modsecurity-php2shell.conf`](mitigation/apache/modsecurity-php2shell.conf) | Blocks `PHP_SESSION_UPLOAD_PROGRESS` field |
+| Apache .htaccess | [`mitigation/apache/.htaccess`](mitigation/apache/.htaccess) | Blocks multipart POST on non-upload paths |
+| Cloudflare WAF | [`mitigation/cloudflare/waf-rule.txt`](mitigation/cloudflare/waf-rule.txt) | Custom WAF rule templates |
+| Lighttpd | [`mitigation/lighttpd/php2shell.conf`](mitigation/lighttpd/php2shell.conf) | Block multipart on non-upload vhosts |
+| FrankenPHP | [`mitigation/frankenphp/Caddyfile-snippet`](mitigation/frankenphp/Caddyfile-snippet) | Disable upload progress globally |
+
+### Quick Fix Script (Emergency)
+
+```bash
+# Check if your PHP is vulnerable
+sudo ./mitigation/quick-fix.sh --check
+
+# Apply emergency mitigation
+sudo ./mitigation/quick-fix.sh
+
+# Revert if needed
+sudo ./mitigation/quick-fix.sh --revert
+```
+
+> ⚠️ WAF rules and config changes are **temporary mitigations**. The real fix is updating PHP.
+
+## 🔍 Threat Detection
+
+See [docs/THREAT_DETECTION.md](docs/THREAT_DETECTION.md) for:
+- Behavioral indicators (suspicious child processes)
+- Network-level detection (multipart anomalies, cookie anomalies)
+- YARA and Snort/Suricata rules
+- Log analysis patterns
+- Incident response steps
+
+## 🧪 Nuclei Templates
+
+Nuclei scanner templates for automated detection:
+
+```bash
+# Scan with included templates
+nuclei -u http://target.com -t nuclei-templates/
+
+# Critical RCE detection only
+nuclei -u http://target.com -t nuclei-templates/CVE-2026-109619.yaml
+```
+
+See [`nuclei-templates/`](nuclei-templates/) directory.
+
+---
+
 ## ⚠️ Legal Disclaimer
 
 ```
