@@ -1,0 +1,121 @@
+diff --git a/ext/session/php_session.h b/ext/session/php_session.h
+index 31b96340..5131449b 100644
+--- a/ext/session/php_session.h
++++ b/ext/session/php_session.h
+@@ -133,10 +133,10 @@ typedef struct _php_session_rfc1867_progress {
+ 	size_t    content_length;
+ 
+ 	zval      data;                 /* the array exported to session data */
+-	zval	 *post_bytes_processed; /* data["bytes_processed"] */
++	zend_long post_bytes_processed;
+ 	zval      files;                /* data["files"] array */
+ 	zval      current_file;         /* array of currently uploading file */
+-	zval	 *current_file_bytes_processed;
++	zend_long current_file_bytes_processed;
+ } php_session_rfc1867_progress;
+ 
+ typedef struct _php_ps_globals {
+diff --git a/ext/session/session.c b/ext/session/session.c
+index dd780f4a..096f7738 100644
+--- a/ext/session/session.c
++++ b/ext/session/session.c
+@@ -2957,10 +2957,37 @@ static bool php_check_cancel_upload(php_session_rfc1867_progress *progress) /* {
+ 	return Z_TYPE_P(cancel_upload) == IS_TRUE;
+ } /* }}} */
+ 
++static void php_session_rfc1867_sync_counters(php_session_rfc1867_progress *progress) /* {{{ */
++{
++	zval *entry, *files, *file;
++
++	if (Z_ISUNDEF(progress->data) || Z_TYPE(progress->data) != IS_ARRAY) {
++		return;
++	}
++
++	/* Never retain HashTable bucket pointers: publishing progress data may
++	 * separate or replace the exported array. Resolve each counter afresh. */
++	if ((entry = zend_hash_str_find(Z_ARRVAL(progress->data), "bytes_processed", sizeof("bytes_processed") - 1)) != NULL) {
++		ZVAL_LONG(entry, progress->post_bytes_processed);
++	}
++	if ((files = zend_hash_str_find(Z_ARRVAL(progress->data), "files", sizeof("files") - 1)) == NULL
++			|| Z_TYPE_P(files) != IS_ARRAY) {
++		return;
++	}
++	if (zend_hash_num_elements(Z_ARRVAL_P(files)) == 0
++			|| (file = zend_hash_index_find(Z_ARRVAL_P(files), zend_hash_num_elements(Z_ARRVAL_P(files)) - 1)) == NULL
++			|| Z_TYPE_P(file) != IS_ARRAY) {
++		return;
++	}
++	if ((entry = zend_hash_str_find(Z_ARRVAL_P(file), "bytes_processed", sizeof("bytes_processed") - 1)) != NULL) {
++		ZVAL_LONG(entry, progress->current_file_bytes_processed);
++	}
++} /* }}} */
++
+ static void php_session_rfc1867_update(php_session_rfc1867_progress *progress, int force_update) /* {{{ */
+ {
+ 	if (!force_update) {
+-		if (Z_LVAL_P(progress->post_bytes_processed) < progress->next_update) {
++		if (progress->post_bytes_processed < progress->next_update) {
+ 			return;
+ 		}
+ #ifdef HAVE_GETTIMEOFDAY
+@@ -2975,9 +3002,10 @@ static void php_session_rfc1867_update(php_session_rfc1867_progress *progress, i
+ 			progress->next_update_time = dtv + PS(rfc1867_min_freq);
+ 		}
+ #endif
+-		progress->next_update = Z_LVAL_P(progress->post_bytes_processed) + progress->update_step;
++		progress->next_update = progress->post_bytes_processed + progress->update_step;
+ 	}
+ 
++	php_session_rfc1867_sync_counters(progress);
+ 	php_session_initialize();
+ 	PS(session_status) = php_session_active;
+ 	IF_SESSION_VARS() {
+@@ -3088,7 +3116,7 @@ static zend_result php_session_rfc1867_callback(unsigned int event, void *event_
+ 				add_assoc_bool_ex(&progress->data, "done", sizeof("done") - 1, 0);
+ 				add_assoc_zval_ex(&progress->data, "files", sizeof("files") - 1, &progress->files);
+ 
+-				progress->post_bytes_processed = zend_hash_str_find(Z_ARRVAL(progress->data), "bytes_processed", sizeof("bytes_processed") - 1);
++				progress->post_bytes_processed = data->post_bytes_processed;
+ 
+ 				php_rinit_session(0);
+ 				PS(id) = zend_string_init(Z_STRVAL(progress->sid), Z_STRLEN(progress->sid), 0);
+@@ -3114,9 +3142,7 @@ static zend_result php_session_rfc1867_callback(unsigned int event, void *event_
+ 
+ 			add_next_index_zval(&progress->files, &progress->current_file);
+ 
+-			progress->current_file_bytes_processed = zend_hash_str_find(Z_ARRVAL(progress->current_file), "bytes_processed", sizeof("bytes_processed") - 1);
+-
+-			Z_LVAL_P(progress->current_file_bytes_processed) =  data->post_bytes_processed;
++			progress->current_file_bytes_processed = data->post_bytes_processed;
+ 			php_session_rfc1867_update(progress, 0);
+ 		}
+ 		break;
+@@ -3127,8 +3153,8 @@ static zend_result php_session_rfc1867_callback(unsigned int event, void *event_
+ 				break;
+ 			}
+ 
+-			Z_LVAL_P(progress->current_file_bytes_processed) = data->offset + data->length;
+-			Z_LVAL_P(progress->post_bytes_processed) = data->post_bytes_processed;
++			progress->current_file_bytes_processed = data->offset + data->length;
++			progress->post_bytes_processed = data->post_bytes_processed;
+ 
+ 			php_session_rfc1867_update(progress, 0);
+ 		}
+@@ -3147,7 +3173,7 @@ static zend_result php_session_rfc1867_callback(unsigned int event, void *event_
+ 			add_assoc_long_ex(&progress->current_file, "error", sizeof("error") - 1, data->cancel_upload);
+ 			add_assoc_bool_ex(&progress->current_file, "done", sizeof("done") - 1,  1);
+ 
+-			Z_LVAL_P(progress->post_bytes_processed) = data->post_bytes_processed;
++			progress->post_bytes_processed = data->post_bytes_processed;
+ 
+ 			php_session_rfc1867_update(progress, 0);
+ 		}
+@@ -3162,7 +3188,7 @@ static zend_result php_session_rfc1867_callback(unsigned int event, void *event_
+ 					if (!Z_ISUNDEF(progress->data)) {
+ 						SEPARATE_ARRAY(&progress->data);
+ 						add_assoc_bool_ex(&progress->data, "done", sizeof("done") - 1, 1);
+-						Z_LVAL_P(progress->post_bytes_processed) = data->post_bytes_processed;
++						progress->post_bytes_processed = data->post_bytes_processed;
+ 						php_session_rfc1867_update(progress, 1);
+ 					}
+ 				}
