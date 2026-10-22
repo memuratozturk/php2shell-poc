@@ -1,0 +1,32 @@
+version: "3.8"
+
+# phpMyAdmin lab — php2shell test ortamı
+# Port 9085'te phpMyAdmin + MariaDB ayağa kalkar.
+
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: php2shell_root
+      MYSQL_DATABASE: testdb
+      MYSQL_USER: php2shell
+      MYSQL_PASSWORD: php2shell_pass
+    volumes:
+      - db_data:/var/lib/mysql
+
+  phpmyadmin:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "9085:80"
+    environment:
+      PMA_HOST: db
+      PMA_USER: root
+      PMA_PASSWORD: php2shell_root
+      UPLOAD_LIMIT: 64M
+    depends_on:
+      - db
+
+volumes:
+  db_data:

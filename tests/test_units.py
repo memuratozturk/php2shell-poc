@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Birim testler — python3 -m unittest discover -s tests -v
+import argparse
 import importlib.util
 import os
 import struct
@@ -23,6 +24,8 @@ exploit = load("php2shell_exploit", "exploit/php2shell_exploit.py")
 memd = load("memdisclosure", "exploit/memdisclosure.py")
 bug3 = load("bug3", "exploit/bug3_backtrace_uaf.py")
 bug4 = load("bug4", "exploit/bug4_opcache_confusion.py")
+chain_a = load("chain_a", "exploit/chain_a_session_lfi.py")
+chain_c = load("chain_c", "exploit/chain_c_mismatch_rce.py")
 scanner = load("scanner", "tools/scanner.py")
 calib = load("calibrate", "tools/calibrate_offsets.py")
 shellsrv = load("shell_server", "tools/shell_server.py")
@@ -257,6 +260,156 @@ class TestShellServer(unittest.TestCase):
     def test_os_specific_test_commands(self):
         self.assertIn("whoami", shellsrv.get_test_commands("windows"))
         self.assertIn("id", shellsrv.get_test_commands("linux"))
+
+
+class TestChainASessionLFI(unittest.TestCase):
+    def test_import(self):
+        self.assertTrue(hasattr(chain_a, "main"))
+        self.assertTrue(hasattr(chain_a, "run_chain"))
+        self.assertTrue(hasattr(chain_a, "inject_session"))
+        self.assertTrue(hasattr(chain_a, "trigger_lfi"))
+
+    def test_argparse(self):
+        with mock.patch("sys.argv", ["chain_a", "--host", "10.0.0.1",
+                                     "--port", "8080", "--command", "whoami",
+                                     "--lfi-param", "file",
+                                     "--lfi-path", "/vuln.php"]):
+            ap = argparse.ArgumentParser()
+            ap.add_argument("--host", default="127.0.0.1")
+            ap.add_argument("--port", type=int, default=80)
+            ap.add_argument("--command", default="id")
+            ap.add_argument("--lfi-param", default=None)
+            ap.add_argument("--lfi-path", default="/index.php")
+            args = ap.parse_args()
+            self.assertEqual(args.host, "10.0.0.1")
+            self.assertEqual(args.port, 8080)
+            self.assertEqual(args.command, "whoami")
+
+    def test_random_session_id_length(self):
+        sid = chain_a.random_session_id(32)
+        self.assertEqual(len(sid), 32)
+        self.assertTrue(sid.isalnum())
+
+    def test_random_session_id_default(self):
+        sid = chain_a.random_session_id()
+        self.assertEqual(len(sid), 26)
+
+    def test_build_session_poison_payload(self):
+        payload = chain_a.build_session_poison_payload("id")
+        self.assertIn("system", payload)
+        self.assertIn("id", payload)
+        self.assertTrue(payload.startswith("<?php"))
+        self.assertTrue(payload.endswith("?>"))
+
+    def test_build_session_file_path(self):
+        path = chain_a.build_session_file_path("/tmp/sessions", "abc123")
+        self.assertEqual(path, "/tmp/sessions/sess_abc123")
+
+    def test_build_multipart_structure(self):
+        body = chain_a.build_multipart(
+            [{"name": "a", "data": b"1"},
+             {"name": "f", "filename": "test.txt", "data": b"2"}],
+            b"TESTBND")
+        self.assertIn(b"--TESTBND\r\n", body)
+        self.assertIn(b'name="a"', body)
+        self.assertIn(b'filename="test.txt"', body)
+        self.assertTrue(body.endswith(b"--TESTBND--\r\n"))
+
+    def test_default_session_paths(self):
+        self.assertIn("/tmp/sessions", chain_a.DEFAULT_SESSION_PATHS)
+        self.assertIn("/var/lib/php/sessions", chain_a.DEFAULT_SESSION_PATHS)
+
+    def test_default_lfi_params(self):
+        self.assertIn("page", chain_a.DEFAULT_LFI_PARAMS)
+        self.assertIn("file", chain_a.DEFAULT_LFI_PARAMS)
+        self.assertIn("include", chain_a.DEFAULT_LFI_PARAMS)
+
+    def test_extract_command_output_filters_session(self):
+        body = "upload_progress_foo|a:1:{}\nuid=0(root)\n"
+        out = chain_a._extract_command_output(body)
+        self.assertIn("uid=0(root)", out)
+        self.assertNotIn("upload_progress", out)
+
+    def test_parse_status(self):
+        self.assertEqual(chain_a._parse_status(b"HTTP/1.1 200 OK\r\n"), 200)
+        self.assertEqual(chain_a._parse_status(b"HTTP/1.1 404 Not Found\r\n"), 404)
+        self.assertEqual(chain_a._parse_status(b"garbage"), 0)
+
+    def test_parse_body(self):
+        resp = b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\nbody_content"
+        self.assertEqual(chain_a._parse_body(resp), b"body_content")
+
+
+class TestChainCMismatchRCE(unittest.TestCase):
+    def test_import(self):
+        self.assertTrue(hasattr(chain_c, "main"))
+        self.assertTrue(hasattr(chain_c, "run_chain"))
+        self.assertTrue(hasattr(chain_c, "poison_session"))
+        self.assertTrue(hasattr(chain_c, "trigger_mismatch"))
+
+    def test_argparse(self):
+        with mock.patch("sys.argv", ["chain_c", "--host", "10.0.0.1",
+                                     "--port", "9090", "--command", "whoami",
+                                     "--gadget", "Guzzle"]):
+            ap = argparse.ArgumentParser()
+            ap.add_argument("--host", default="127.0.0.1")
+            ap.add_argument("--port", type=int, default=80)
+            ap.add_argument("--command", default="id")
+            ap.add_argument("--gadget", default="Monolog")
+            args = ap.parse_args()
+            self.assertEqual(args.host, "10.0.0.1")
+            self.assertEqual(args.port, 9090)
+            self.assertEqual(args.gadget, "Guzzle")
+
+    def test_known_gadgets(self):
+        self.assertIn("Monolog", chain_c.KNOWN_GADGETS)
+        self.assertIn("Guzzle", chain_c.KNOWN_GADGETS)
+        self.assertIn("Laravel", chain_c.KNOWN_GADGETS)
+        self.assertIn("Symfony", chain_c.KNOWN_GADGETS)
+
+    def test_gadget_has_required_fields(self):
+        for name, g in chain_c.KNOWN_GADGETS.items():
+            self.assertIn("class", g, f"{name} missing 'class'")
+            self.assertIn("property", g, f"{name} missing 'property'")
+            self.assertIn("chain", g, f"{name} missing 'chain'")
+
+    def test_build_php_serialize_payload(self):
+        payload = chain_c.build_php_serialize_payload("id", "Monolog")
+        self.assertIsInstance(payload, bytes)
+        self.assertIn(b"Monolog", payload)
+        self.assertIn(b"id", payload)
+
+    def test_build_php_serialize_payload_guzzle(self):
+        payload = chain_c.build_php_serialize_payload("whoami", "Guzzle")
+        self.assertIn(b"GuzzleHttp", payload)
+        self.assertIn(b"whoami", payload)
+
+    def test_build_poison_filename_has_pipe(self):
+        filename = chain_c.build_poison_filename("id")
+        self.assertTrue(filename.startswith("|"))
+
+    def test_build_multipart_structure(self):
+        body = chain_c.build_multipart(
+            [{"name": "x", "data": b"y"}], b"BND")
+        self.assertIn(b"--BND\r\n", body)
+        self.assertTrue(body.endswith(b"--BND--\r\n"))
+
+    def test_filter_php_errors(self):
+        body = ('<b>Warning</b>: something\n'
+                '<br /> in /var/www on line 5\n'
+                'uid=0(root) gid=0(root)\n')
+        out = chain_c._filter_php_errors(body)
+        self.assertIn("uid=0(root)", out)
+        self.assertNotIn("Warning", out)
+
+    def test_random_session_id(self):
+        sid = chain_c.random_session_id(20)
+        self.assertEqual(len(sid), 20)
+        self.assertTrue(sid.isalnum())
+
+    def test_parse_status(self):
+        self.assertEqual(chain_c._parse_status(b"HTTP/1.1 502 Bad Gateway\r\n"), 502)
+        self.assertEqual(chain_c._parse_status(b"HTTP/1.1 200 OK\r\n"), 200)
 
 
 if __name__ == "__main__":

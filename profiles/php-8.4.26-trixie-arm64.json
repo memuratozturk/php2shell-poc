@@ -1,0 +1,10 @@
+{
+  "php_version": "8.4.26",
+  "distro": "debian-trixie",
+  "arch": "aarch64",
+  "image": "custom build",
+  "zif_system": "0x3D8A40",
+  "zval_ptr_dtor": "0x5A1B20",
+  "htdata_offset": "0x690D8",
+  "notes": "ARM64, Apache 2.4.68"
+}

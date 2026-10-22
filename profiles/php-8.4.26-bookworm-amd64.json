@@ -1,0 +1,10 @@
+{
+  "php_version": "8.4.26",
+  "distro": "debian-bookworm",
+  "arch": "x86_64",
+  "image": "php:8.4.26-apache",
+  "zif_system": "0x465370",
+  "zval_ptr_dtor": "0x65EB60",
+  "htdata_offset": "0x690D8",
+  "notes": "Official Docker image, Apache 2.4.69, mod_php"
+}
